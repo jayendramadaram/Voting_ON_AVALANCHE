@@ -4,9 +4,12 @@ import "../App.scss";
 import PROFILE from "../assets/profile.jpg";
 import { FaRocket } from "react-icons/fa";
 import { AiFillCloud, AiOutlineCloud, AiTwotoneCloud } from "react-icons/ai";
+import { TbLetterM } from "react-icons/tb";
 import Web3 from "web3";
 import toast, { Toaster } from "react-hot-toast";
 import CandidateAvatar from "../utils/Candidate.json";
+import USN from "../utils/USN.json";
+import { Contract } from "web3-eth-contract";
 // https://testnet.snowtrace.io/address/0x2dba96742f3b24a68F3979D9ADBC535d274429fD#code
 // https://testnet.snowtrace.io/address/0x81790038dd6465e5DBDfd1C195d3f96C3411a113#code
 
@@ -24,6 +27,10 @@ interface CandidateType {
   4: string;
 }
 
+interface Err {
+  code: number;
+}
+
 export const Vote = () => {
   const [Loader, setLoader] = useState<boolean>(false);
   const [LoadErr, setLoadErr] = useState<boolean>(false);
@@ -33,9 +40,36 @@ export const Vote = () => {
   const [ERRORmsg, setERRORmsg] = useState<string>("Wallet Note Connected");
   const { ethereum } = window;
   const [CandiTSX, setCandiTSX] = useState<any>();
+  const [USNC, setUSNC] = useState<Contract>();
   // const { ethereum } = window;
 
   useEffect(() => {}, []);
+
+  const MINTTOKS = () => {
+    const web3 = new Web3(ethereum);
+    const UsnCONTRACT = new web3.eth.Contract(
+      USN.abi as any,
+      USN.networks[43113].address
+    );
+    toast.promise(
+      web3.eth
+        .sendTransaction({
+          from: Account,
+          data: UsnCONTRACT.methods.MintMore().encodeABI(), // deploying a contracrt
+          to: USN.networks[43113].address,
+        })
+        .then(function (receipt: any) {
+          console.log(receipt, "brooooo");
+        })
+        .catch((err: Err) => console.log(err, "mint error")),
+      {
+        loading: "Minting ....",
+        success: <b>PERFECT Minted NEW</b>,
+        error: <b>Mint Failed 😔 Try Externally</b>,
+      }
+    );
+  };
+
   const changeNetwork = () => {
     if (ethereum.networkVersion !== "43113") {
       ethereum
@@ -43,7 +77,7 @@ export const Vote = () => {
           method: "wallet_switchEthereumChain",
           params: [{ chainId: Web3.utils.toHex(43113) }],
         })
-        .catch((err) => {
+        .catch((err: Err) => {
           if (err.code === 4902) {
             ethereum
               .request({
@@ -61,7 +95,7 @@ export const Vote = () => {
                   },
                 ],
               })
-              .catch((err) => {
+              .catch((err: Err) => {
                 console.log(err);
               });
           } else {
@@ -78,12 +112,82 @@ export const Vote = () => {
   };
   let CandidateList: CandidateType[] = [];
 
+  const USNError = () =>
+    toast.error("You Dont Have Enough USN Bal Please Mint from Below", {
+      duration: 4000,
+      position: "top-right",
+    });
+  const VoteError = () =>
+    toast.error("U already Votedd", {
+      duration: 4000,
+      position: "top-right",
+    });
+  const USNsucces = () =>
+    toast.success("USN approved Voting", {
+      duration: 4000,
+      position: "top-right",
+    });
+
+  const VoteCandi = async (index: number) => {
+    const web3 = new Web3(ethereum);
+    const UsnCONTRACT = new web3.eth.Contract(
+      USN.abi as any,
+      USN.networks[43113].address
+    );
+    const VotingContract = new web3.eth.Contract(
+      VOTINGCOTRACT.abi as any,
+      VOTINGCOTRACT.networks[43113].address
+    );
+    // setUSNC(UsnCONTRACT);
+
+    let Account = await ethereum.request({ method: "eth_requestAccounts" });
+    console.log(Account, "account");
+
+    const USNbal = await UsnCONTRACT.methods.balanceOf(Account[0]).call();
+    console.log(USNbal);
+
+    const CurrentMap = await VotingContract.methods.usingMap().call();
+
+    const CanVote = await VotingContract.methods
+      .voted(CurrentMap, Account[0])
+      .call();
+    console.log("Canvote", CanVote);
+
+    if (USNbal < 1) {
+      USNError();
+      return;
+    } else if (CanVote) {
+      VoteError();
+      return;
+    }
+    USNsucces();
+    console.log("Voting too ", index);
+    toast.promise(
+      web3.eth
+        .sendTransaction({
+          from: Account[0],
+          data: VotingContract.methods.vote(index).encodeABI(), // deploying a contracrt
+          to: VOTINGCOTRACT.networks[43113].address,
+        })
+        .then(function (receipt: any) {
+          console.log(receipt, "brooooo");
+        })
+        .catch((err: Err) => console.log(err, "Vote err")),
+      {
+        loading: "Minting ....",
+        success: <b>VOTE CASTED</b>,
+        error: <b>VOTING FAILED / REVERTED</b>,
+      }
+    );
+  };
+
   const FetchUsers = async () => {
     const web3 = new Web3(ethereum);
     const VotingContract = new web3.eth.Contract(
       VOTINGCOTRACT.abi as any,
       VOTINGCOTRACT.networks[43113].address
     );
+
     const CandidateCount = await VotingContract.methods.CandidateCount().call();
     console.log(CandidateCount, "hurrayy");
     let i = 0;
@@ -103,8 +207,11 @@ export const Vote = () => {
       CandidateList.push(Candidate);
     }
     console.log(CandidateList);
-    let CandidatesTSX = CandidateList.map((candi) => (
-      <div className='form-glass-control flex items-center justify-between md:space-x-16 space-x-4'>
+    let CandidatesTSX = CandidateList.map((candi, index) => (
+      <div
+        className='form-glass-control flex items-center justify-between md:space-x-16 space-x-4'
+        key={index}
+      >
         <img src={candi[4]} className='rounded-full w-12 h-12' />
         <span className='text-violet-400 flex space-x-3'>
           <div className='md:block hidden'>
@@ -112,7 +219,10 @@ export const Vote = () => {
           </div>{" "}
           <div>{candi[0]}</div>
         </span>
-        <button className='border px-5 py-3 bg-green-400 rounded-xl hover:shadow-xl'>
+        <button
+          className='border px-5 py-3 bg-green-400 rounded-xl hover:shadow-xl'
+          onClick={() => VoteCandi(index)}
+        >
           Vote
         </button>
       </div>
@@ -127,12 +237,12 @@ export const Vote = () => {
       // const web3 = new Web3(window.web3.currentProvider);
       ethereum
         .request({ method: "eth_requestAccounts" })
-        .then((res) => {
+        .then((res: string[]) => {
           setAccount(res[0]);
           changeNetwork();
           FetchUsers();
         })
-        .catch((err) => {
+        .catch((err: Err) => {
           setERRORmsg("User rejected!! Please try Reconnecting");
           console.log(err);
           setLoadErr(true);
@@ -256,6 +366,13 @@ export const Vote = () => {
         </div>
       </div>
       {/* TOASTER */}
+      <button
+        type='button'
+        className='fixed bottom-5 right-5 inline-block  rounded-full bg-green-500 p-3 text-xs font-medium uppercase leading-tight text-white shadow-md transition duration-150 ease-in-out hover:bg-green-600 hover:shadow-lg focus:bg-green-400 focus:shadow-lg focus:outline-none focus:ring-0 active:bg-green-800 active:shadow-lg '
+        onClick={() => MINTTOKS()}
+      >
+        <TbLetterM className='h-8 w-8' />
+      </button>
       <Toaster />
     </div>
   );
