@@ -13,3 +13,6 @@ module.exports = async function (deployer, network, accounts) {
 
   // await PNT.transfer(lpool.address, 1000000000000000000000000000000);
 };
+
+// https://testnet.snowtrace.io/address/0x1958CbE28A9B44f50C027D2846db783768718630#readContract
+// https://testnet.snowtrace.io/address/0x95Ab024c88c42f284132957Eade37f158B386517#readContract

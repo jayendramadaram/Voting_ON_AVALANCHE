@@ -86,5 +86,9 @@ contract Voting {
         
         
     }
+
+    function GetCandidate(uint _num) public view returns(string memory, address , uint) {
+        return ( Candidates[_num].name , Candidates[_num].addr , Candidates[_num].VoteCount);
+    }   
     receive() external payable {}
 }
